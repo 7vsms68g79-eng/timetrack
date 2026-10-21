@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC45C"/>
+      <stop offset="0.55" stop-color="#FF9B2F"/>
+      <stop offset="1" stop-color="#F2661B"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.28" cy="0.02" r="0.95">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.38"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cap" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFEEDB"/>
+    </linearGradient>
+    <linearGradient id="sand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFEBD2"/>
+    </linearGradient>
+    <path id="glass" d="M330 256 L694 256 C694 380 590 452 534 512 C590 572 694 644 694 768 L330 768 C330 644 434 572 490 512 C434 452 330 380 330 256 Z"/>
+    <clipPath id="inside"><use href="#glass"/></clipPath>
+    <!-- Schatten nur außerhalb des Glases, damit es klar bleibt -->
+    <mask id="outside" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <use href="#glass" fill="#000"/>
+    </mask>
+    <filter id="shadow" filterUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="22"/>
+      <feOffset dy="20" result="blur"/>
+      <feFlood flood-color="#8A3200" flood-opacity="0.36"/>
+      <feComposite in2="blur" operator="in"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+
+  <g mask="url(#outside)">
+    <g filter="url(#shadow)">
+      <rect width="1024" height="1024" fill="none"/>
+      <use href="#glass" fill="#000" stroke="#000" stroke-width="18"/>
+      <rect x="286" y="194" width="452" height="66" rx="33"/>
+      <rect x="286" y="764" width="452" height="66" rx="33"/>
+    </g>
+  </g>
+
+  <use href="#glass" fill="#FFFFFF" fill-opacity="0.2"/>
+  <g clip-path="url(#inside)">
+    <path d="M300 392 Q512 432 724 392 L724 530 L300 530 Z" fill="url(#sand)"/>
+    <rect x="504" y="500" width="16" height="176" rx="8" fill="#FFFFFF"/>
+    <path d="M300 780 L300 762 C372 706 446 660 512 652 C578 660 652 706 724 762 L724 780 Z" fill="url(#sand)"/>
+    <g fill="none" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="11" stroke-linecap="round">
+      <path d="M368 292 C370 328 378 356 392 380"/>
+      <path d="M462 562 C424 594 388 632 370 684"/>
+    </g>
+  </g>
+  <use href="#glass" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linejoin="round"/>
+  <rect x="286" y="194" width="452" height="66" rx="33" fill="url(#cap)"/>
+  <rect x="286" y="764" width="452" height="66" rx="33" fill="url(#cap)"/>
+</svg>
