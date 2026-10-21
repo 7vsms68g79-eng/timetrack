@@ -138,7 +138,10 @@
     breaks: [0, 0, 30, 0, 30, 0, 0],
     dayStart: '08:00',
     vacationPerMonth: 1.5,
-    vacationCredit: true, // Urlaubstag schreibt das Tages-Soll als Überstunden gut
+    // Ein Urlaubstag zählt immer vacationDayMinutes (8 h). Liegt das Tages-Soll darunter
+    // (Montag 4 h), wird die Differenz als Überstunden gutgeschrieben.
+    vacationDayMinutes: 480,
+    vacationCredit: true,
     state: 'HB',
     initialOvertime: 0,
     vacationAdjust: {}, // { "2027": 2 } – Übertrag/Korrektur je Jahr
@@ -157,6 +160,8 @@
     s.vacationPerMonth = Math.max(0, Number(s.vacationPerMonth) || 0);
     s.initialOvertime = Math.round(Number(s.initialOvertime) || 0);
     s.vacationCredit = s.vacationCredit !== false;
+    const vacDay = Number(s.vacationDayMinutes);
+    s.vacationDayMinutes = Number.isFinite(vacDay) ? Math.max(0, Math.min(720, Math.round(vacDay))) : DEFAULTS.vacationDayMinutes;
     if (!DATE_RE.test(s.startDate)) s.startDate = DEFAULTS.startDate;
     if (!/^\d{2}:\d{2}$/.test(s.dayStart)) s.dayStart = DEFAULTS.dayStart;
     if (!(s.state in STATES)) s.state = DEFAULTS.state;
@@ -178,7 +183,8 @@
 
   /* ---------- Tagesrechnung ----------
      gained: Arbeit über Soll (Unterschreitung wird NIE abgezogen)
-     credit: Urlaubsgutschrift (Tages-Soll)
+     credit: Urlaubsgutschrift = Urlaubstag (8 h) − Tages-Soll, nie negativ
+     vacationValue: Gutschrift, die ein Urlaub an diesem Tag bringen würde
      used:   per "Überstunden anrechnen" verbrauchte Zeit = fehlende Soll-Zeit */
   function dayInfo(data, k) {
     const s = data.settings;
@@ -195,12 +201,13 @@
     const vacation = !!entry.vacation && target > 0;
     const overtime = !vacation && !!entry.overtime && target > 0;
     const gained = vacation ? 0 : Math.max(0, worked - target);
-    const credit = vacation && s.vacationCredit ? target : 0;
+    const vacationValue = target > 0 && s.vacationCredit ? Math.max(0, s.vacationDayMinutes - target) : 0;
+    const credit = vacation ? vacationValue : 0;
     const used = overtime ? Math.max(0, target - worked) : 0;
     return {
       key: k, date, weekday, beforeStart, holiday, scheduled, target, pause,
       presence: target + pause, entry, hasWork, worked, vacation, overtime,
-      gained, credit, used, delta: gained + credit - used,
+      gained, vacationValue, credit, used, delta: gained + credit - used,
     };
   }
 

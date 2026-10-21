@@ -36,7 +36,7 @@ Alle Einträge bleiben lokal auf dem Gerät. Unter **Einstellungen → Backup ex
 | Mehr als das Soll gearbeitet | + Differenz |
 | Weniger als das Soll gearbeitet | nichts – es wird nie abgezogen |
 | Arbeit an einem freien Tag oder Feiertag | + komplette Arbeitszeit |
-| Urlaubstag (nur ganze Tage, nur Arbeitstage) | + Tages-Soll (Mo 4 h, Di/Do 8 h) – in den Einstellungen abschaltbar |
+| Urlaubstag (nur ganze Tage, nur Arbeitstage) | zählt 8 h und macht den Tag frei; + Differenz zum Soll (Mo +4 h, Di/Do ±0) – in den Einstellungen anpassbar |
 | „Überstunden anrechnen“ | − fehlende Soll-Zeit (freier Tag: volles Soll; teilweise gearbeitet: nur die Lücke) |
 
 - **Wochenplan:** Mo 4:00 h, Di 8:00 h (+ 30 min Pause = 8:30 h Anwesenheit), Do 8:00 h (+ 30 min Pause) = 20 h/Woche. In den Einstellungen änderbar.

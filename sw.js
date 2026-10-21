@@ -1,6 +1,6 @@
 /* TimeTrack – Service Worker
    Netzwerk zuerst (Updates kommen sofort an), Cache als Rückfall → App läuft auch offline. */
-const CACHE = 'timetrack-v1';
+const CACHE = 'timetrack-v2';
 const ASSETS = [
   './',
   'index.html',
@@ -16,7 +16,12 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // cache: 'reload' umgeht den HTTP-Cache, damit eine neue Version wirklich frische Dateien bekommt
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(ASSETS.map((url) => new Request(url, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -31,7 +36,8 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   event.respondWith(
-    fetch(req)
+    // no-cache: beim Server nachfragen (GitHub Pages cacht sonst bis zu 10 Minuten)
+    fetch(req.url, { cache: 'no-cache' })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();

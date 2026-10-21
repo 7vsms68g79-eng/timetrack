@@ -40,14 +40,19 @@ test('Arbeit an freien Tagen zählt komplett als Überstunden', () => {
   assert.equal(T.balance(d), 150);
 });
 
-test('Urlaub schreibt das Tages-Soll als Überstunden gut (Mo +4 h, Di +8 h)', () => {
+test('Urlaubstag = 8 h: nur die Differenz zum Soll wird gutgeschrieben (Mo +4 h, Di/Do ±0)', () => {
   const d = fresh();
-  T.setVacation(d, '2026-10-26', true); // Montag
+  T.setVacation(d, '2026-10-26', true); // Montag, Soll 4 h
   assert.equal(T.dayInfo(d, '2026-10-26').credit, 240);
-  T.setVacation(d, '2026-10-27', true); // Dienstag
-  assert.equal(T.balance(d), 240 + 480);
+  T.setVacation(d, '2026-10-27', true); // Dienstag, Soll 8 h
+  assert.equal(T.dayInfo(d, '2026-10-27').credit, 0);
+  T.setVacation(d, '2026-10-29', true); // Donnerstag, Soll 8 h
+  assert.equal(T.balance(d), 240);
+  assert.equal(T.dayInfo(d, '2026-11-02').vacationValue, 240); // Vorschau ohne Eintrag
   d.settings.vacationCredit = false;
   assert.equal(T.balance(d), 0);
+  // alte Daten ohne neues Feld bekommen den Standard von 8 h
+  assert.equal(T.normalize({ settings: { vacationCredit: true } }).settings.vacationDayMinutes, 480);
 });
 
 test('Urlaub nur an Arbeitstagen, gespeicherte Arbeitszeit kommt nach dem Entfernen zurück', () => {

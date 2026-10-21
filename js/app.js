@@ -302,7 +302,7 @@
     } else if (i.vacation) {
       cls.push('is-vac');
       title = 'Urlaub';
-      sub = i.credit ? `Soll ${T.fmt(i.target)} h als Überstunden gutgeschrieben` : 'Ganzer Tag';
+      sub = i.credit ? `${T.fmt(i.credit, true)} h gutgeschrieben (Urlaubstag ${T.fmt(state.data.settings.vacationDayMinutes)} h − Soll ${T.fmt(i.target)} h)` : 'Ganzer Tag frei';
       delta = i.credit ? T.fmt(i.credit, true) : '';
     } else if (i.overtime) {
       cls.push('is-ot');
@@ -380,7 +380,7 @@
       parts.push(`<div class="banner">${ICON.flag}<span><b>${esc(i.holiday)}</b>Gesetzlicher Feiertag – kein Soll. Arbeit an diesem Tag zählt komplett als Überstunden.</span></div>`);
     }
     if (i.vacation) {
-      parts.push(`<div class="state vac">${ICON.sun}<div><b>Urlaubstag</b>${i.credit ? `${T.fmt(i.credit, true)} h als Überstunden gutgeschrieben` : 'Soll gilt als erfüllt'}</div></div>
+      parts.push(`<div class="state vac">${ICON.sun}<div><b>Urlaubstag</b>${i.credit ? `Ganzer Tag frei · ${T.fmt(i.credit, true)} h als Überstunden gutgeschrieben` : 'Ganzer Tag frei · Soll gilt als erfüllt'}</div></div>
         <button class="btn line" data-act="vac-off" data-key="${i.key}">Urlaub entfernen</button>`);
       return parts.join('');
     }
@@ -465,8 +465,8 @@
     const vs = T.vacationSummary(state.data, y, todayKey());
     const left = vs.remaining - 1;
     out.push(`<div class="act vac">
-      <div class="act-head"><span>Urlaub nehmen</span><b>${s.vacationCredit ? `${T.fmt(i.target, true)} h` : '1 Tag'}</b></div>
-      <p>Ganzer Tag${s.vacationCredit ? `, ${T.fmt(i.target)} h werden als Überstunden gutgeschrieben` : ''}. Resturlaub ${y}: ${T.num(vs.remaining)} → ${T.num(left)} ${plural(left, 'Tag', 'Tage')}.${left < 0 ? ' <em>Mehr als dein Anspruch.</em>' : ''}</p>
+      <div class="act-head"><span>Urlaub nehmen</span><b>${i.vacationValue ? `${T.fmt(i.vacationValue, true)} h` : '1 Tag'}</b></div>
+      <p>Ganzer Tag frei${i.vacationValue ? `. Ein Urlaubstag zählt ${T.fmt(s.vacationDayMinutes)} h, dein Soll ist ${T.fmt(i.target)} h – die ${T.fmt(i.vacationValue)} h Differenz werden als Überstunden gutgeschrieben` : ''}. Resturlaub ${y}: ${T.num(vs.remaining)} → ${T.num(left)} ${plural(left, 'Tag', 'Tage')}.${left < 0 ? ' <em>Mehr als dein Anspruch.</em>' : ''}</p>
       <button class="btn vac" data-act="vac-on" data-key="${i.key}">Urlaub eintragen</button>
     </div>`);
     return `<div class="acts">${out.join('')}</div>`;
@@ -642,7 +642,7 @@
       <ul class="rules">
         <li style="--c:var(--green)">Mehr als das Soll gearbeitet: Die Differenz kommt aufs Konto.</li>
         <li style="--c:var(--sand)">Weniger gearbeitet: Es wird nichts abgezogen.</li>
-        <li style="--c:var(--teal)">${s.vacationCredit ? 'Urlaubstag: Das Tages-Soll wird gutgeschrieben (Mo +4 h, Di/Do +8 h).' : 'Urlaubstag: zählt neutral.'}</li>
+        <li style="--c:var(--teal)">${s.vacationCredit ? `Urlaubstag: zählt ${T.fmt(s.vacationDayMinutes)} h. Ist dein Soll an dem Tag kleiner, wird die Differenz gutgeschrieben (Mo +4 h, Di/Do ±0).` : 'Urlaubstag: zählt neutral.'}</li>
         <li style="--c:var(--rust)">Überstunden anrechnen: Die fehlende Soll-Zeit wird abgezogen.</li>
       </ul>
     </div>`;
@@ -726,10 +726,10 @@
     const keys = T.workdaysInRange(state.data, a, b);
     const open = keys.filter((k) => !T.dayInfo(state.data, k).vacation);
     if (!keys.length) return 'Kein Arbeitstag in diesem Zeitraum.';
-    const credit = open.reduce((sum, k) => sum + T.dayInfo(state.data, k).target, 0);
+    const credit = open.reduce((sum, k) => sum + T.dayInfo(state.data, k).vacationValue, 0);
     const already = keys.length - open.length;
     let t = `${open.length} ${plural(open.length, 'Arbeitstag', 'Arbeitstage')}`;
-    if (state.data.settings.vacationCredit && open.length) t += ` · ${T.fmt(credit, true)} h Gutschrift`;
+    if (credit) t += ` · ${T.fmt(credit, true)} h Gutschrift`;
     if (already) t += ` · ${already} schon eingetragen`;
     t += '. Freie Tage und Feiertage zählen nicht.';
     // Reicht der Resturlaub im jeweiligen Jahr?
@@ -781,6 +781,16 @@
         <select data-set="breaks.${wd}" aria-label="Pause ${T.WD_LONG[wd]}"${s.schedule[wd] ? '' : ' disabled'}>${pauseOpts(s.breaks[wd])}</select>
       </div>`).join('');
     const states = Object.entries(T.STATES).map(([k, n]) => `<option value="${k}"${k === s.state ? ' selected' : ''}>${n}</option>`).join('');
+    const vacDayOpts = (val) => {
+      const vals = [];
+      for (let m = 240; m <= 600; m += 30) vals.push(m);
+      if (!vals.includes(val)) vals.push(val);
+      return vals.sort((a, b) => a - b).map((m) => `<option value="${m}"${m === val ? ' selected' : ''}>${T.fmt(m)} h</option>`).join('');
+    };
+    const vacExamples = [1, 2, 3, 4, 5, 6, 0].filter((wd) => s.schedule[wd]).map((wd) => {
+      const c = Math.max(0, s.vacationDayMinutes - s.schedule[wd]);
+      return `${T.WD_SHORT[wd]} ${c ? `${T.fmt(c, true)} h` : '±0'}`;
+    }).join(' · ');
 
     return `
       <h2 class="group-title">Arbeitszeitmodell</h2>
@@ -801,9 +811,10 @@
       <h2 class="group-title">Urlaub</h2>
       <div class="group">
         <label class="row"><span>Urlaubstage pro Monat</span><input type="text" inputmode="decimal" data-set="vacationPerMonth" value="${T.num(s.vacationPerMonth)}"></label>
-        <label class="row"><span>Urlaub als Überstunden gutschreiben</span><input type="checkbox" class="switch" data-set="vacationCredit"${s.vacationCredit ? ' checked' : ''}></label>
+        <label class="row"><span>Ein Urlaubstag zählt</span><select data-set="vacationDayMinutes">${vacDayOpts(s.vacationDayMinutes)}</select></label>
+        <label class="row"><span>Differenz als Überstunden gutschreiben</span><input type="checkbox" class="switch" data-set="vacationCredit"${s.vacationCredit ? ' checked' : ''}></label>
       </div>
-      <p class="group-foot">An: Ein Urlaubstag schreibt dein Tages-Soll als Überstunden gut (Montag +4 h, Dienstag/Donnerstag +8 h). Aus: Urlaub zählt neutral.</p>
+      <p class="group-foot">Ein Urlaubstag zählt ${T.fmt(s.vacationDayMinutes)} h und macht den ganzen Tag frei. Ist dein Soll an dem Tag kleiner, wird die Differenz gutgeschrieben – bei deinem Plan: ${vacExamples}. Aus: Urlaub zählt immer neutral.</p>
 
       <h2 class="group-title">Überstunden</h2>
       <div class="group">
@@ -826,7 +837,7 @@
       <input type="file" id="import-file" accept="application/json,.json" hidden>
       <p class="group-foot">Deine Daten bleiben nur auf diesem Gerät. Sichere ab und zu ein Backup, z. B. in der Dateien-App.</p>
       ${installCard()}
-      <p class="about">TimeTrack 1.0</p>`;
+      <p class="about">TimeTrack 1.1</p>`;
   }
 
   function applySetting(el) {
@@ -846,6 +857,8 @@
       s.vacationPerMonth = v;
     } else if (key === 'vacationCredit') {
       s.vacationCredit = el.checked;
+    } else if (key === 'vacationDayMinutes') {
+      s.vacationDayMinutes = Number(el.value);
     } else if (key === 'state') {
       s.state = el.value;
     } else {
