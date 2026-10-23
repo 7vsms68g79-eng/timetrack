@@ -39,7 +39,8 @@ Alle Einträge bleiben lokal auf dem Gerät. Unter **Einstellungen → Backup ex
 | Urlaubstag (nur ganze Tage, nur Arbeitstage) | zählt 8 h und macht den Tag frei; + Differenz zum Soll (Mo +4 h, Di/Do ±0) – in den Einstellungen anpassbar |
 | „Überstunden anrechnen“ | − fehlende Soll-Zeit (freier Tag: volles Soll; teilweise gearbeitet: nur die Lücke) |
 
-- **Wochenplan:** Mo 4:00 h, Di 8:00 h (+ 30 min Pause = 8:30 h Anwesenheit), Do 8:00 h (+ 30 min Pause) = 20 h/Woche. In den Einstellungen änderbar.
+- **Wochenplan:** 20-h-Plan (Werkstudent): Mo 4:00 h, Di 8:00 h (+ 30 min Pause = 8:30 h Anwesenheit), Do 8:00 h (+ 30 min Pause). 40-h-Plan (Vollzeit): Mo–Fr je 8:00 h + 30 min Pause. Umschalten in den Einstellungen mit „Gilt ab“-Datum – Tage davor behalten ihren alten Plan, bisherige Überstunden bleiben unverändert. Ein Wechsel lässt sich per × wieder löschen.
+- **Dark Mode:** Einstellungen → Darstellung → Aus / An / Auto (Auto folgt dem iPhone).
 - **Urlaubsanspruch:** volle Beschäftigungsmonate × 1,5 Tage, Bruchteile ab 0,5 werden aufgerundet (§ 5 BUrlG). 2026: 3 × 1,5 = 4,5 → **5 Tage**, ab 2027: **18 Tage**. Übertrag/Korrektur je Jahr im Urlaub-Tab.
 - **Feiertage:** gesetzliche Feiertage für Bremen (bundesweit + Reformationstag); dort gilt kein Soll. Bundesland in den Einstellungen wählbar.
 - Alles lässt sich rückwirkend eintragen und mit **Rückgängig** zurücknehmen.

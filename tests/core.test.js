@@ -140,3 +140,41 @@ test('Formatierung und Eingabe', () => {
   assert.equal(T.parseHM('2,5'), 150);
   assert.ok(Number.isNaN(T.parseHM('abc')));
 });
+
+test('40-h-Plan: Mo–Fr je 8 h + 30 min Pause, Überstunden erst über 8 h', () => {
+  const d = fresh();
+  T.setPlan(d.settings, null, T.PRESETS[40].schedule, T.PRESETS[40].breaks);
+  assert.equal(T.rangeSummary(d, '2026-10-19', '2026-10-25').target, 40 * 60);
+  assert.equal(T.dayInfo(d, '2026-10-21').presence, 510); // Mittwoch jetzt 8:30 vor Ort
+  T.setWork(d, '2026-10-21', range('08:00', '17:00', 30)); // 8:30 netto → +0:30
+  T.setWork(d, '2026-10-23', range('08:00', '16:00', 30)); // 7:30 netto → kein Abzug
+  assert.equal(T.balance(d), 30);
+  T.setVacation(d, '2026-10-19', true); // Montag mit 8 h Soll → Urlaub bringt ±0
+  assert.equal(T.dayInfo(d, '2026-10-19').credit, 0);
+});
+
+test('Planwechsel ab Startdatum lässt vergangene Tage unverändert', () => {
+  const d = fresh();
+  T.setWork(d, '2026-10-19', { mode: 'duration', minutes: 285 }); // Mo 4:45 im 20-h-Plan → +0:45
+  const idx = T.setPlan(d.settings, '2026-11-02', T.PRESETS[40].schedule, T.PRESETS[40].breaks);
+  assert.equal(idx, 1);
+  assert.equal(T.dayInfo(d, '2026-10-28').target, 0); // Mi vor dem Wechsel frei
+  assert.equal(T.dayInfo(d, '2026-11-04').target, 480); // Mi nach dem Wechsel 8 h
+  assert.equal(T.balance(d), 45);
+  assert.equal(T.presetOf(T.planFor(d.settings, '2026-11-04')), '40');
+  // ab Dezember wieder 20 h, danach den 40-h-Zeitraum löschen
+  T.setPlan(d.settings, '2026-12-01', T.PRESETS[20].schedule, T.PRESETS[20].breaks);
+  assert.equal(d.settings.plans.length, 3);
+  T.removePlan(d.settings, 1);
+  assert.equal(d.settings.plans.length, 1); // gleicht dem Plan davor → zusammengefasst
+  assert.equal(T.dayInfo(d, '2026-11-04').target, 0);
+});
+
+test('Alte Daten mit einzelnem Wochenplan werden übernommen', () => {
+  const d = T.normalize({ settings: { schedule: [0, 300, 480, 0, 480, 0, 0], breaks: [0, 0, 30, 0, 30, 0, 0] }, days: {} });
+  assert.equal(d.settings.plans.length, 1);
+  assert.equal(d.settings.plans[0].from, null);
+  assert.equal(T.dayInfo(d, '2026-10-19').target, 300);
+  assert.equal(d.settings.theme, 'auto');
+  assert.ok(!('schedule' in d.settings));
+});

@@ -131,11 +131,20 @@
 
   /* ---------- Daten ---------- */
 
+  // Vorlagen für den Wochenplan: Soll (reine Arbeitszeit) und Pause in Minuten, Index 0 = Sonntag
+  const PRESETS = Object.freeze({
+    20: { label: '20 h', name: 'Werkstudent', desc: 'Mo 4 h, Di und Do je 8 h + 30 min Pause',
+      schedule: [0, 240, 480, 0, 480, 0, 0], breaks: [0, 0, 30, 0, 30, 0, 0] },
+    40: { label: '40 h', name: 'Vollzeit', desc: 'Mo–Fr je 8 h + 30 min Pause',
+      schedule: [0, 480, 480, 480, 480, 480, 0], breaks: [0, 30, 30, 30, 30, 30, 0] },
+  });
+
   const DEFAULTS = Object.freeze({
     startDate: '2026-10-01',
-    // Soll (reine Arbeitszeit) und Pause in Minuten je Wochentag, Index 0 = Sonntag
-    schedule: [0, 240, 480, 0, 480, 0, 0],
-    breaks: [0, 0, 30, 0, 30, 0, 0],
+    // Wochenpläne mit Startdatum. Der erste gilt ab Arbeitsbeginn (from: null), jeder weitere
+    // ab seinem Datum – vergangene Tage behalten beim Planwechsel ihren alten Plan.
+    plans: [{ from: null, schedule: PRESETS[20].schedule, breaks: PRESETS[20].breaks }],
+    theme: 'auto', // 'auto' (wie iPhone) | 'light' | 'dark'
     dayStart: '08:00',
     vacationPerMonth: 1.5,
     // Ein Urlaubstag zählt immer vacationDayMinutes (8 h). Liegt das Tages-Soll darunter
@@ -154,8 +163,18 @@
     const s = Object.assign({}, DEFAULTS, src.settings && typeof src.settings === 'object' ? src.settings : {});
     const week = (a, def) =>
       Array.isArray(a) && a.length === 7 ? a.map((v) => Math.max(0, Math.round(Number(v) || 0))) : def.slice();
-    s.schedule = week(s.schedule, DEFAULTS.schedule);
-    s.breaks = week(s.breaks, DEFAULTS.breaks);
+    // Ältere Daten hatten nur einen Wochenplan (schedule/breaks) → wird zum ersten Plan
+    const given = src.settings && Array.isArray(src.settings.plans) ? src.settings.plans : [];
+    const rawPlans = given.length ? given : [{ from: null, schedule: s.schedule, breaks: s.breaks }];
+    s.plans = sortPlans(rawPlans.filter((p) => p && typeof p === 'object').map((p) => ({
+      from: DATE_RE.test(p.from) ? p.from : null,
+      schedule: week(p.schedule, PRESETS[20].schedule),
+      breaks: week(p.breaks, PRESETS[20].breaks),
+    })));
+    if (!s.plans.length) s.plans = [{ from: null, schedule: PRESETS[20].schedule.slice(), breaks: PRESETS[20].breaks.slice() }];
+    delete s.schedule;
+    delete s.breaks;
+    if (!['auto', 'light', 'dark'].includes(s.theme)) s.theme = 'auto';
     s.vacationAdjust = Object.assign({}, s.vacationAdjust);
     s.vacationPerMonth = Math.max(0, Number(s.vacationPerMonth) || 0);
     s.initialOvertime = Math.round(Number(s.initialOvertime) || 0);
@@ -175,6 +194,50 @@
     return { version: 1, settings: s, days };
   }
 
+  /* ---------- Wochenpläne ---------- */
+
+  const sameWeek = (a, b) => a.every((v, i) => v === b[i]);
+
+  // Aufsteigend nach Startdatum; der früheste Plan gilt immer ab Arbeitsbeginn.
+  // Gleiches Datum: der spätere gewinnt. Ein Plan, der dem vorherigen gleicht, entfällt.
+  function sortPlans(plans) {
+    const byFrom = new Map();
+    plans.forEach((p) => byFrom.set(p.from || '', p));
+    const sorted = [...byFrom.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, p]) => p);
+    if (sorted.length) sorted[0] = Object.assign({}, sorted[0], { from: null });
+    return sorted.filter((p, i) => i === 0 || !(sameWeek(p.schedule, sorted[i - 1].schedule) && sameWeek(p.breaks, sorted[i - 1].breaks)));
+  }
+
+  function planIndexFor(s, k) {
+    let idx = 0;
+    s.plans.forEach((p, i) => { if (p.from && p.from <= k) idx = i; });
+    return idx;
+  }
+  const planFor = (s, k) => s.plans[planIndexFor(s, k)];
+
+  function presetOf(plan) {
+    for (const [id, p] of Object.entries(PRESETS)) {
+      if (sameWeek(plan.schedule, p.schedule) && sameWeek(plan.breaks, p.breaks)) return id;
+    }
+    return null;
+  }
+
+  // Plan ab Datum setzen (leer oder ≤ Arbeitsbeginn = für alle Tage). Gibt den Index des Plans zurück.
+  function setPlan(s, from, schedule, breaks) {
+    const f = from && from > s.startDate ? from : null;
+    const plan = { from: f, schedule: schedule.slice(), breaks: breaks.slice() };
+    s.plans = f
+      ? sortPlans([...s.plans.filter((p) => p.from !== f), plan])
+      : sortPlans([plan, ...s.plans.slice(1)]);
+    return planIndexFor(s, f || s.startDate);
+  }
+
+  function removePlan(s, idx) {
+    if (idx <= 0 || idx >= s.plans.length) return;
+    s.plans.splice(idx, 1);
+    s.plans = sortPlans(s.plans);
+  }
+
   function workedMinutes(w) {
     if (!w) return 0;
     if (w.mode === 'duration') return Math.max(0, Math.round(Number(w.minutes) || 0));
@@ -192,9 +255,10 @@
     const weekday = date.getDay();
     const beforeStart = k < s.startDate;
     const holiday = beforeStart ? null : holidayName(k, s.state);
-    const scheduled = beforeStart ? 0 : s.schedule[weekday] || 0;
+    const plan = planFor(s, k);
+    const scheduled = beforeStart ? 0 : plan.schedule[weekday] || 0;
     const target = holiday ? 0 : scheduled;
-    const pause = target > 0 ? s.breaks[weekday] || 0 : 0;
+    const pause = target > 0 ? plan.breaks[weekday] || 0 : 0;
     const entry = (!beforeStart && data.days[k]) || {};
     const hasWork = !!entry.work;
     const worked = hasWork ? workedMinutes(entry.work) : 0;
@@ -329,7 +393,8 @@
     WD_SHORT, WD_LONG, MONTHS, MONTHS_SHORT,
     toMin, toHHMM, fmt, fmtShort, num, parseHM,
     STATES, easterSunday, holidays, holidayName,
-    DEFAULTS, normalize, workedMinutes, dayInfo, defaultWork,
+    PRESETS, DEFAULTS, normalize, planFor, planIndexFor, presetOf, setPlan, removePlan,
+    workedMinutes, dayInfo, defaultWork,
     balance, rangeSummary, yearSummary, vacationEntitlement, vacationSummary, workdaysInRange,
     setWork, setVacation, setOvertime,
   };

@@ -61,6 +61,8 @@
     cursor: today(),
     sheet: null,
     undo: null,
+    planEdit: null, // Index des Wochenplans, der in den Einstellungen bearbeitet wird
+    planDraft: null, // '20' | '40' während ein Planwechsel bestätigt wird
   };
 
   function persist() {
@@ -83,7 +85,18 @@
 
   /* ---------- Rendering ---------- */
 
+  // Dark Mode: 'auto' folgt dem iPhone, sonst fest hell/dunkel
+  const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  function applyTheme() {
+    const t = state.data.settings.theme;
+    const dark = t === 'dark' || (t === 'auto' && darkQuery.matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  }
+  if (darkQuery.addEventListener) darkQuery.addEventListener('change', applyTheme);
+  else if (darkQuery.addListener) darkQuery.addListener(applyTheme);
+
   function render() {
+    applyTheme();
     renderTop();
     renderMain();
     renderTabbar();
@@ -218,13 +231,15 @@
     const last = new Date(y, m, T.daysInMonth(y, m));
     const end = T.addDays(T.startOfWeek(last), 6);
     const tk = todayKey();
-    const sched = state.data.settings.schedule;
+    const workdays = new Set(); // Wochentage, die in diesem Monat ein Soll haben
     let cells = '';
     for (let d = T.startOfWeek(first); d <= end; d = T.addDays(d, 1)) {
       const k = T.keyOf(d);
-      cells += cellHTML(T.dayInfo(state.data, k), d.getMonth() !== m, k === tk);
+      const i = T.dayInfo(state.data, k);
+      if (i.scheduled > 0 && d.getMonth() === m) workdays.add(i.weekday);
+      cells += cellHTML(i, d.getMonth() !== m, k === tk);
     }
-    const head = [1, 2, 3, 4, 5, 6, 0].map((wd) => `<span class="${sched[wd] ? 'work' : ''}">${T.WD_SHORT[wd]}</span>`).join('');
+    const head = [1, 2, 3, 4, 5, 6, 0].map((wd) => `<span class="${workdays.has(wd) ? 'work' : ''}">${T.WD_SHORT[wd]}</span>`).join('');
     const sum = T.rangeSummary(state.data, T.keyOf(first), T.keyOf(last));
     return `<div class="wd-head">${head}</div><div class="grid">${cells}</div>${summaryHTML(sum)}${legendHTML()}`;
   }
@@ -642,7 +657,7 @@
       <ul class="rules">
         <li style="--c:var(--green)">Mehr als das Soll gearbeitet: Die Differenz kommt aufs Konto.</li>
         <li style="--c:var(--sand)">Weniger gearbeitet: Es wird nichts abgezogen.</li>
-        <li style="--c:var(--teal)">${s.vacationCredit ? `Urlaubstag: zählt ${T.fmt(s.vacationDayMinutes)} h. Ist dein Soll an dem Tag kleiner, wird die Differenz gutgeschrieben (Mo +4 h, Di/Do ±0).` : 'Urlaubstag: zählt neutral.'}</li>
+        <li style="--c:var(--teal)">${s.vacationCredit ? `Urlaubstag: zählt ${T.fmt(s.vacationDayMinutes)} h. Ist dein Soll an dem Tag kleiner, wird die Differenz gutgeschrieben (${vacExamples(T.planFor(s, todayKey()))}).` : 'Urlaubstag: zählt neutral.'}</li>
         <li style="--c:var(--rust)">Überstunden anrechnen: Die fehlende Soll-Zeit wird abgezogen.</li>
       </ul>
     </div>`;
@@ -761,9 +776,70 @@
 
   /* ---------- Einstellungen ---------- */
 
+  const weekSum = (plan) => plan.schedule.reduce((a, b) => a + b, 0);
+  const fmtDay = (k) => { const d = T.parseKey(k); return `${ddmm(d)}${d.getFullYear()}`; };
+
+  // Plan, der in den Einstellungen bearbeitet wird: der angetippte Zeitraum, sonst der heute gültige
+  function editPlanIndex() {
+    const s = state.data.settings;
+    return state.planEdit != null && s.plans[state.planEdit] ? state.planEdit : T.planIndexFor(s, todayKey());
+  }
+
+  function planLabel(plan) {
+    const id = T.presetOf(plan);
+    return id ? `${id}-h-Plan · ${T.PRESETS[id].name}` : `Eigener Plan · ${T.fmt(weekSum(plan))} h`;
+  }
+
+  function planRange(s, idx) {
+    const p = s.plans[idx], next = s.plans[idx + 1];
+    const start = p.from ? `ab ${fmtDay(p.from)}` : 'seit Arbeitsbeginn';
+    return next ? `${start} bis ${fmtDay(T.keyOf(T.addDays(T.parseKey(next.from), -1)))}` : start;
+  }
+
+  // Urlaubsgutschrift je Arbeitstag, z. B. "Mo +4:00 h · Di ±0 · Do ±0"
+  function vacExamples(plan) {
+    const day = state.data.settings.vacationDayMinutes;
+    return [1, 2, 3, 4, 5, 6, 0].filter((wd) => plan.schedule[wd]).map((wd) => {
+      const c = Math.max(0, day - plan.schedule[wd]);
+      return `${T.WD_SHORT[wd]} ${c ? `${T.fmt(c, true)} h` : '±0'}`;
+    }).join(' · ');
+  }
+
+  function planDraftHTML(s, plan) {
+    const p = T.PRESETS[state.planDraft];
+    const tk = todayKey();
+    const from = plan.from && plan.from > tk ? plan.from : (tk < s.startDate ? s.startDate : tk);
+    return `<div class="card plan-draft">
+      <h3>${state.planDraft}-h-Plan · ${p.name}</h3>
+      <p class="pd-desc">${p.desc} = ${T.fmt(weekSum(p))} h pro Woche.</p>
+      <label class="field"><span>Gilt ab</span><input type="date" name="planfrom" value="${from}" min="${s.startDate}"></label>
+      <p class="hint">Tage davor behalten ihren bisherigen Plan – deine bisherigen Überstunden bleiben unverändert. Wählst du deinen Arbeitsbeginn, gilt der Plan für alle Tage.</p>
+      <div class="f-actions">
+        <button class="btn line" data-act="plan-cancel">Abbrechen</button>
+        <button class="btn primary" data-act="plan-apply">Übernehmen</button>
+      </div>
+    </div>`;
+  }
+
+  function applyPlanDraft() {
+    const s = state.data.settings;
+    const id = state.planDraft;
+    const from = ($('[name="planfrom"]') || {}).value;
+    if (!id) return;
+    if (!from) return toast('Bitte ein Datum wählen');
+    const p = T.PRESETS[id];
+    const msg = from <= s.startDate ? `${id}-h-Plan gilt jetzt für alle Tage` : `${id}-h-Plan gilt ab ${fmtDay(from)}`;
+    state.planDraft = null;
+    mutate(msg, (d) => { state.planEdit = T.setPlan(d.settings, from, p.schedule, p.breaks); });
+  }
+
   function settingsTab() {
     const s = state.data.settings;
-    const weekly = s.schedule.reduce((a, b) => a + b, 0);
+    const tk = todayKey();
+    const pIdx = editPlanIndex();
+    const plan = s.plans[pIdx];
+    const preset = T.presetOf(plan);
+    const weekly = weekSum(plan);
     const sollOpts = (val) => {
       const vals = [];
       for (let m = 0; m <= 720; m += 15) vals.push(m);
@@ -775,11 +851,22 @@
       if (!vals.includes(val)) vals.push(val);
       return vals.sort((a, b) => a - b).map((m) => `<option value="${m}"${m === val ? ' selected' : ''}>${m} min</option>`).join('');
     };
-    const rows = [1, 2, 3, 4, 5, 6, 0].map((wd) => `<div class="srow${s.schedule[wd] ? ' work' : ''}">
+    const rows = [1, 2, 3, 4, 5, 6, 0].map((wd) => `<div class="srow${plan.schedule[wd] ? ' work' : ''}">
         <span class="sr-day">${T.WD_LONG[wd]}</span>
-        <select data-set="schedule.${wd}" aria-label="Soll ${T.WD_LONG[wd]}">${sollOpts(s.schedule[wd])}</select>
-        <select data-set="breaks.${wd}" aria-label="Pause ${T.WD_LONG[wd]}"${s.schedule[wd] ? '' : ' disabled'}>${pauseOpts(s.breaks[wd])}</select>
+        <select data-set="schedule.${wd}" aria-label="Soll ${T.WD_LONG[wd]}">${sollOpts(plan.schedule[wd])}</select>
+        <select data-set="breaks.${wd}" aria-label="Pause ${T.WD_LONG[wd]}"${plan.schedule[wd] ? '' : ' disabled'}>${pauseOpts(plan.breaks[wd])}</select>
       </div>`).join('');
+    const presetSeg = `<div class="seg plan-seg" role="group" aria-label="Wochenplan">${Object.entries(T.PRESETS).map(([id, p]) =>
+      `<button class="${(state.planDraft || preset) === id ? 'on' : ''}" data-act="plan-preset" data-preset="${id}"><b>${p.label}</b><span>${p.name}</span></button>`).join('')}</div>`;
+    const todayIdx = T.planIndexFor(s, tk);
+    const periods = s.plans.length < 2 ? '' : `<div class="group plans">${s.plans.map((p, idx) => `
+        <div class="prow${idx === pIdx ? ' on' : ''}">
+          <button class="prow-pick" data-act="plan-pick" data-idx="${idx}"><b>${planLabel(p)}</b><span>${planRange(s, idx)}${idx === todayIdx ? ' · gilt heute' : ''}</span></button>
+          ${idx > 0 ? `<button class="x" data-act="plan-del" data-idx="${idx}" aria-label="Zeitraum löschen">×</button>` : ''}
+        </div>`).join('')}</div>
+      <p class="group-foot">Tippe einen Zeitraum an, um seinen Wochenplan unten anzupassen. × löscht den Wechsel.</p>`;
+    const themes = [['light', 'Aus'], ['dark', 'An'], ['auto', 'Auto']].map(([id, l]) =>
+      `<button class="${s.theme === id ? 'on' : ''}" data-act="theme" data-theme="${id}">${l}</button>`).join('');
     const states = Object.entries(T.STATES).map(([k, n]) => `<option value="${k}"${k === s.state ? ' selected' : ''}>${n}</option>`).join('');
     const vacDayOpts = (val) => {
       const vals = [];
@@ -787,19 +874,24 @@
       if (!vals.includes(val)) vals.push(val);
       return vals.sort((a, b) => a - b).map((m) => `<option value="${m}"${m === val ? ' selected' : ''}>${T.fmt(m)} h</option>`).join('');
     };
-    const vacExamples = [1, 2, 3, 4, 5, 6, 0].filter((wd) => s.schedule[wd]).map((wd) => {
-      const c = Math.max(0, s.vacationDayMinutes - s.schedule[wd]);
-      return `${T.WD_SHORT[wd]} ${c ? `${T.fmt(c, true)} h` : '±0'}`;
-    }).join(' · ');
 
     return `
-      <h2 class="group-title">Arbeitszeitmodell</h2>
+      <h2 class="group-title">Darstellung</h2>
       <div class="group">
-        <div class="srow head"><span></span><span>Soll</span><span>Pause</span></div>
+        <div class="row"><span>Dark Mode</span><div class="seg theme-seg" role="group" aria-label="Dark Mode">${themes}</div></div>
+      </div>
+      <p class="group-foot">Auto: richtet sich nach deinem iPhone (Einstellungen → Anzeige &amp; Helligkeit).</p>
+
+      <h2 class="group-title">Arbeitszeitmodell</h2>
+      ${presetSeg}
+      ${state.planDraft ? planDraftHTML(s, plan) : ''}
+      ${periods}
+      <div class="group sched">
+        <div class="srow head"><span class="sr-period">${planRange(s, pIdx)}</span><span>Soll</span><span>Pause</span></div>
         ${rows}
         <div class="srow total"><span class="sr-day">Pro Woche</span><b>${T.fmt(weekly)} h</b><span></span></div>
       </div>
-      <p class="group-foot">Soll = reine Arbeitszeit. Die Pause kommt nur zur Anwesenheit dazu (8:00 h + 30 min = 8:30 h vor Ort).</p>
+      <p class="group-foot">Soll = reine Arbeitszeit. Die Pause kommt nur zur Anwesenheit dazu (8:00 h + 30 min = 8:30 h vor Ort). Überstunden zählen erst, wenn du mehr als das Soll arbeitest.</p>
 
       <h2 class="group-title">Allgemein</h2>
       <div class="group">
@@ -814,7 +906,7 @@
         <label class="row"><span>Ein Urlaubstag zählt</span><select data-set="vacationDayMinutes">${vacDayOpts(s.vacationDayMinutes)}</select></label>
         <label class="row"><span>Differenz als Überstunden gutschreiben</span><input type="checkbox" class="switch" data-set="vacationCredit"${s.vacationCredit ? ' checked' : ''}></label>
       </div>
-      <p class="group-foot">Ein Urlaubstag zählt ${T.fmt(s.vacationDayMinutes)} h und macht den ganzen Tag frei. Ist dein Soll an dem Tag kleiner, wird die Differenz gutgeschrieben – bei deinem Plan: ${vacExamples}. Aus: Urlaub zählt immer neutral.</p>
+      <p class="group-foot">Ein Urlaubstag zählt ${T.fmt(s.vacationDayMinutes)} h und macht den ganzen Tag frei. Ist dein Soll an dem Tag kleiner, wird die Differenz gutgeschrieben – bei deinem aktuellen Plan: ${vacExamples(T.planFor(s, tk))}. Aus: Urlaub zählt immer neutral.</p>
 
       <h2 class="group-title">Überstunden</h2>
       <div class="group">
@@ -837,7 +929,7 @@
       <input type="file" id="import-file" accept="application/json,.json" hidden>
       <p class="group-foot">Deine Daten bleiben nur auf diesem Gerät. Sichere ab und zu ein Backup, z. B. in der Dateien-App.</p>
       ${installCard()}
-      <p class="about">TimeTrack 1.1</p>`;
+      <p class="about">TimeTrack 1.2</p>`;
   }
 
   function applySetting(el) {
@@ -864,7 +956,7 @@
     } else {
       const m = key.match(/^(schedule|breaks)\.(\d)$/);
       if (!m) return;
-      s[m[1]][Number(m[2])] = Number(el.value);
+      s.plans[editPlanIndex()][m[1]][Number(m[2])] = Number(el.value);
     }
     persist();
     clampCursor();
@@ -1010,6 +1102,7 @@
       return;
     }
     state.tab = tab;
+    state.planDraft = null;
     persistUI();
     render();
     window.scrollTo(0, 0);
@@ -1071,6 +1164,25 @@
       case 'reset': resetAll(); break;
       case 'undo': undo(); break;
       case 'hide-install': uiPrefs.hideInstall = true; persistUI(); renderMain(); break;
+      case 'theme': state.data.settings.theme = t.dataset.theme; persist(); render(); break;
+      case 'plan-preset': {
+        const id = t.dataset.preset;
+        const current = T.presetOf(state.data.settings.plans[editPlanIndex()]);
+        state.planDraft = id === current ? null : id;
+        renderMain();
+        const card = $('.plan-draft');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        break;
+      }
+      case 'plan-cancel': state.planDraft = null; renderMain(); break;
+      case 'plan-apply': applyPlanDraft(); break;
+      case 'plan-pick': state.planEdit = Number(t.dataset.idx); state.planDraft = null; renderMain(); break;
+      case 'plan-del': {
+        const idx = Number(t.dataset.idx);
+        state.planEdit = null;
+        mutate('Planwechsel gelöscht', (d) => T.removePlan(d.settings, idx));
+        break;
+      }
     }
   });
 
@@ -1133,6 +1245,10 @@
       if (quick && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.6) navigate(dx < 0 ? 1 : -1);
     }
   }, { passive: true });
+
+  // Beim Scrollen bekommt die Statusleiste einen dunklen Hintergrund
+  const onScroll = () => document.documentElement.classList.toggle('scrolled', window.scrollY > 8);
+  window.addEventListener('scroll', onScroll, { passive: true });
 
   // Neuer Tag, während die App im Hintergrund lag → "Heute" aktualisieren
   let lastDay = todayKey();
