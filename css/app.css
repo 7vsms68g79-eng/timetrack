@@ -119,21 +119,29 @@ svg { display: block; }
 
 /* ---------- Kopfbereich ---------- */
 
+/* iOS legt bei Web-Apps einen Weichzeichner über den oberen Rand. Dort liegt deshalb immer
+   eine einfarbige Fläche (auch beim Scrollen), und der Inhalt beginnt erst darunter –
+   so ist der Effekt nicht zu sehen. Ohne Statusleiste (Safari-Tab) ist --edge 0. */
+:root { --edge: calc(var(--safe-top) * 1.5); }
+
 .statusbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 30;
-  height: var(--safe-top);
+  height: var(--edge);
   background: var(--band);
-  opacity: 0; transition: opacity 0.2s;
   pointer-events: none;
 }
-.scrolled .statusbar { opacity: 1; }
+.statusbar::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 14px;
+  background: linear-gradient(var(--band), transparent);
+}
 
 .top {
   color: var(--band-ink);
   background:
-    radial-gradient(110% 80% at 100% -20%, rgba(245, 176, 74, 0.26), transparent 62%),
+    linear-gradient(180deg, var(--band) var(--edge), transparent calc(var(--edge) + 48px)),
+    radial-gradient(110% 80% at 100% 10%, rgba(245, 176, 74, 0.22), transparent 62%),
     linear-gradient(180deg, var(--band-2), var(--band));
-  padding: calc(var(--safe-top) + 6px) 18px 38px;
+  padding: calc(var(--edge) + 4px) 18px 38px;
 }
 
 .brand-row { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }

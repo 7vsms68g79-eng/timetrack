@@ -929,7 +929,7 @@
       <input type="file" id="import-file" accept="application/json,.json" hidden>
       <p class="group-foot">Deine Daten bleiben nur auf diesem Gerät. Sichere ab und zu ein Backup, z. B. in der Dateien-App.</p>
       ${installCard()}
-      <p class="about">TimeTrack 1.2</p>`;
+      <p class="about">TimeTrack 1.3</p>`;
   }
 
   function applySetting(el) {

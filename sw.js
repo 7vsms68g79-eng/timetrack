@@ -1,6 +1,6 @@
 /* TimeTrack – Service Worker
    Netzwerk zuerst (Updates kommen sofort an), Cache als Rückfall → App läuft auch offline. */
-const CACHE = 'timetrack-v3';
+const CACHE = 'timetrack-v4';
 const ASSETS = [
   './',
   'index.html',
