@@ -170,6 +170,24 @@ test('Planwechsel ab Startdatum lässt vergangene Tage unverändert', () => {
   assert.equal(T.dayInfo(d, '2026-11-04').target, 0);
 });
 
+test('Krank: nur Markierung, zählt neutral und ersetzt Urlaub/Anrechnung', () => {
+  const d = fresh();
+  T.setWork(d, '2026-10-20', range('08:00', '17:30', 30)); // 9 h, würde +1 h geben
+  T.setSick(d, '2026-10-20', true);
+  const i = T.dayInfo(d, '2026-10-20');
+  assert.equal(i.sick, true);
+  assert.equal(i.delta, 0);
+  assert.equal(T.balance(d), 0);
+  T.setVacation(d, '2026-10-26', true);
+  T.setSick(d, '2026-10-26', true); // Krank statt Urlaub → Urlaubstag zurück, keine Gutschrift
+  assert.equal(T.dayInfo(d, '2026-10-26').vacation, false);
+  assert.equal(T.vacationSummary(d, 2026, '2026-12-31').used, 0);
+  T.setSick(d, '2026-10-21', true); // Mittwoch frei → keine Wirkung
+  assert.equal(T.dayInfo(d, '2026-10-21').sick, false);
+  T.setSick(d, '2026-10-20', false); // entfernen → Arbeitszeit zählt wieder
+  assert.equal(T.balance(d), 60);
+});
+
 test('Alte Daten mit einzelnem Wochenplan werden übernommen', () => {
   const d = T.normalize({ settings: { schedule: [0, 300, 480, 0, 480, 0, 0], breaks: [0, 0, 30, 0, 30, 0, 0] }, days: {} });
   assert.equal(d.settings.plans.length, 1);

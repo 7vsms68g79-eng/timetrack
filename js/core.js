@@ -262,15 +262,17 @@
     const entry = (!beforeStart && data.days[k]) || {};
     const hasWork = !!entry.work;
     const worked = hasWork ? workedMinutes(entry.work) : 0;
-    const vacation = !!entry.vacation && target > 0;
-    const overtime = !vacation && !!entry.overtime && target > 0;
-    const gained = vacation ? 0 : Math.max(0, worked - target);
+    // Krank: nur Markierung, zählt neutral (keine Überstunden, kein Abzug, kein Urlaubstag)
+    const sick = !!entry.sick && target > 0;
+    const vacation = !sick && !!entry.vacation && target > 0;
+    const overtime = !sick && !vacation && !!entry.overtime && target > 0;
+    const gained = vacation || sick ? 0 : Math.max(0, worked - target);
     const vacationValue = target > 0 && s.vacationCredit ? Math.max(0, s.vacationDayMinutes - target) : 0;
     const credit = vacation ? vacationValue : 0;
     const used = overtime ? Math.max(0, target - worked) : 0;
     return {
       key: k, date, weekday, beforeStart, holiday, scheduled, target, pause,
-      presence: target + pause, entry, hasWork, worked, vacation, overtime,
+      presence: target + pause, entry, hasWork, worked, sick, vacation, overtime,
       gained, vacationValue, credit, used, delta: gained + credit - used,
     };
   }
@@ -302,7 +304,7 @@
       r.target += i.target;
       if (i.target > 0) r.workdays++;
       if (i.vacation) r.vacationDays++;
-      else r.worked += i.worked;
+      if (!i.vacation && !i.sick) r.worked += i.worked;
       r.gained += i.gained;
       r.credit += i.credit;
       r.used += i.used;
@@ -385,8 +387,9 @@
   }
   // Arbeitszeit bleibt beim Urlaub gespeichert und gilt wieder, sobald der Urlaub entfernt wird
   const setWork = (data, k, work) => patchDay(data, k, (e) => { e.work = work || undefined; });
-  const setVacation = (data, k, on) => patchDay(data, k, (e) => { e.vacation = !!on; if (on) e.overtime = false; });
-  const setOvertime = (data, k, on) => patchDay(data, k, (e) => { e.overtime = !!on; if (on) e.vacation = false; });
+  const setVacation = (data, k, on) => patchDay(data, k, (e) => { e.vacation = !!on; if (on) { e.overtime = false; e.sick = false; } });
+  const setOvertime = (data, k, on) => patchDay(data, k, (e) => { e.overtime = !!on; if (on) { e.vacation = false; e.sick = false; } });
+  const setSick = (data, k, on) => patchDay(data, k, (e) => { e.sick = !!on; if (on) { e.vacation = false; e.overtime = false; } });
 
   return {
     pad, keyOf, parseKey, addDays, addMonths, daysInMonth, startOfWeek, isoWeek,
@@ -396,6 +399,6 @@
     PRESETS, DEFAULTS, normalize, planFor, planIndexFor, presetOf, setPlan, removePlan,
     workedMinutes, dayInfo, defaultWork,
     balance, rangeSummary, yearSummary, vacationEntitlement, vacationSummary, workdaysInRange,
-    setWork, setVacation, setOvertime,
+    setWork, setVacation, setOvertime, setSick,
   };
 });

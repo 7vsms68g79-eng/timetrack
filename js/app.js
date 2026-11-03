@@ -29,6 +29,7 @@
       '<path d="M9.4 7.4h5.2c-.7 1.3-1.7 2.1-2.6 2.9-.9-.8-1.9-1.6-2.6-2.9zM12 15.4c1.3 0 2.7 1.5 3.4 4.1H8.6c.7-2.6 2.1-4.1 3.4-4.1z" fill="currentColor"/></svg>',
     cal: svg('<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="8.5" cy="14.5" r=".6" fill="currentColor"/><circle cx="12" cy="14.5" r=".6" fill="currentColor"/><circle cx="15.5" cy="14.5" r=".6" fill="currentColor"/>'),
     clock: svg('<circle cx="12" cy="13.5" r="7.5"/><path d="M12 10v3.5l2.4 2M9.5 2.8h5M12 2.8V6"/>'),
+    sick: svg('<rect x="3.5" y="3.5" width="17" height="17" rx="5"/><path d="M12 8v8M8 12h8"/>'),
     sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>'),
     sliders: svg('<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>'),
     chevL: svg('<path d="M14.5 5.5 8 12l6.5 6.5"/>'),
@@ -248,7 +249,8 @@
     const cls = ['cell'];
     if (out) cls.push('out');
     if (i.beforeStart) cls.push('pre');
-    if (i.vacation) cls.push('is-vac');
+    if (i.sick) cls.push('is-sick');
+    else if (i.vacation) cls.push('is-vac');
     else if (i.overtime) cls.push('is-ot');
     else if (i.target > 0) cls.push('work');
     else if (i.holiday && i.scheduled > 0) cls.push('hol');
@@ -256,7 +258,8 @@
 
     let mid = '';
     let label = `${T.WD_LONG[i.weekday]}, ${longDate(i.date)}`;
-    if (i.vacation) { mid = '<span class="c-lbl">Urlaub</span>'; label += ', Urlaub'; }
+    if (i.sick) { mid = '<span class="c-lbl">Krank</span>'; label += ', krank'; }
+    else if (i.vacation) { mid = '<span class="c-lbl">Urlaub</span>'; label += ', Urlaub'; }
     else if (i.overtime) { mid = '<span class="c-lbl">ÜS</span>'; label += ', Überstunden angerechnet'; }
     else if (i.hasWork) { mid = `<span class="c-ist${i.gained > 0 ? ' plus' : ''}">${T.fmt(i.worked)}</span>`; label += `, ${T.fmt(i.worked)} Stunden gearbeitet`; }
     else if (i.holiday) { mid = '<span class="c-hol">Feiertag</span>'; label += `, ${i.holiday}`; }
@@ -264,7 +267,7 @@
 
     const soll = i.target > 0 ? `<span class="c-soll">${T.fmtShort(i.target)}</span>` : '';
     let bar = '';
-    if (i.target > 0 && i.hasWork && !i.vacation && !i.overtime) {
+    if (i.target > 0 && i.hasWork && !i.vacation && !i.overtime && !i.sick) {
       const p = Math.min(1, i.worked / i.target);
       bar = `<span class="c-bar${p >= 1 ? ' full' : ''}"><i style="width:${Math.round(p * 100)}%"></i></span>`;
     }
@@ -287,6 +290,7 @@
     <span><i class="lg-work"></i>Arbeitstag · Soll in Std.</span>
     <span><i class="lg-vac"></i>Urlaub</span>
     <span><i class="lg-ot"></i>ÜS = Überstunden genommen</span>
+    <span><i class="lg-sick"></i>Krank</span>
     <span><i class="lg-hol"></i>Feiertag</span>
   </div>`;
 
@@ -314,6 +318,10 @@
     if (i.beforeStart) {
       cls.push('pre', 'free');
       title = 'Vor Arbeitsbeginn';
+    } else if (i.sick) {
+      cls.push('is-sick');
+      title = 'Krank';
+      sub = 'Krankheitstag · zählt neutral';
     } else if (i.vacation) {
       cls.push('is-vac');
       title = 'Urlaub';
@@ -363,7 +371,7 @@
       const d = T.addDays(ws, n);
       const dk = T.keyOf(d);
       const i = T.dayInfo(state.data, dk);
-      const dot = i.vacation ? 'vac' : i.overtime ? 'ot' : i.hasWork ? (i.gained > 0 ? 'plus' : 'work') : '';
+      const dot = i.sick ? 'sick' : i.vacation ? 'vac' : i.overtime ? 'ot' : i.hasWork ? (i.gained > 0 ? 'plus' : 'work') : '';
       const cls = [dk === k ? 'on' : '', i.target > 0 ? 'work' : '', dk === tk ? 'today' : ''].filter(Boolean).join(' ');
       strip += `<button class="${cls}" data-act="pick" data-key="${dk}" aria-label="${T.WD_LONG[d.getDay()]}, ${longDate(d)}">
         <span class="s-wd">${T.WD_SHORT[d.getDay()]}</span><span class="s-num">${d.getDate()}</span><span class="s-dot ${dot}"></span>
@@ -393,6 +401,11 @@
     const parts = [chipsHTML(i)];
     if (i.holiday) {
       parts.push(`<div class="banner">${ICON.flag}<span><b>${esc(i.holiday)}</b>Gesetzlicher Feiertag – kein Soll. Arbeit an diesem Tag zählt komplett als Überstunden.</span></div>`);
+    }
+    if (i.sick) {
+      parts.push(`<div class="state sick">${ICON.sick}<div><b>Krank</b>Krankheitstag · zählt neutral, an deinen Überstunden ändert sich nichts</div></div>
+        <button class="btn line" data-act="sick-off" data-key="${i.key}">Krankmeldung entfernen</button>`);
+      return parts.join('');
     }
     if (i.vacation) {
       parts.push(`<div class="state vac">${ICON.sun}<div><b>Urlaubstag</b>${i.credit ? `Ganzer Tag frei · ${T.fmt(i.credit, true)} h als Überstunden gutgeschrieben` : 'Ganzer Tag frei · Soll gilt als erfüllt'}</div></div>
@@ -483,6 +496,11 @@
       <div class="act-head"><span>Urlaub nehmen</span><b>${i.vacationValue ? `${T.fmt(i.vacationValue, true)} h` : '1 Tag'}</b></div>
       <p>Ganzer Tag frei${i.vacationValue ? `. Ein Urlaubstag zählt ${T.fmt(s.vacationDayMinutes)} h, dein Soll ist ${T.fmt(i.target)} h – die ${T.fmt(i.vacationValue)} h Differenz werden als Überstunden gutgeschrieben` : ''}. Resturlaub ${y}: ${T.num(vs.remaining)} → ${T.num(left)} ${plural(left, 'Tag', 'Tage')}.${left < 0 ? ' <em>Mehr als dein Anspruch.</em>' : ''}</p>
       <button class="btn vac" data-act="vac-on" data-key="${i.key}">Urlaub eintragen</button>
+    </div>`);
+    out.push(`<div class="act sick">
+      <div class="act-head"><span>Krank gewesen</span><b>±0</b></div>
+      <p>Der Tag wird rot markiert und zählt neutral – keine Überstunden, kein Abzug, kein Urlaubstag.</p>
+      <button class="btn sick" data-act="sick-on" data-key="${i.key}">Krank eintragen</button>
     </div>`);
     return `<div class="acts">${out.join('')}</div>`;
   }
@@ -929,7 +947,7 @@
       <input type="file" id="import-file" accept="application/json,.json" hidden>
       <p class="group-foot">Deine Daten bleiben nur auf diesem Gerät. Sichere ab und zu ein Backup, z. B. in der Dateien-App.</p>
       ${installCard()}
-      <p class="about">TimeTrack 1.3</p>`;
+      <p class="about">TimeTrack 1.4</p>`;
   }
 
   function applySetting(el) {
@@ -1153,6 +1171,8 @@
       }
       case 'ot-on': mutate('Überstunden angerechnet', (d) => T.setOvertime(d, k, true)); break;
       case 'ot-off': mutate('Anrechnung rückgängig gemacht', (d) => T.setOvertime(d, k, false)); break;
+      case 'sick-on': mutate('Als krank eingetragen', (d) => T.setSick(d, k, true)); break;
+      case 'sick-off': mutate('Krankmeldung entfernt', (d) => T.setSick(d, k, false)); break;
       case 'vac-on': mutate('Urlaub eingetragen', (d) => T.setVacation(d, k, true)); break;
       case 'vac-off': mutate('Urlaub entfernt', (d) => T.setVacation(d, k, false)); break;
       case 'vac-range': bookVacationRange(); break;

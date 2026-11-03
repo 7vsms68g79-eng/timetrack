@@ -36,6 +36,9 @@
   --slate: #5F6F86;
   --slate-soft: #E2E6EC;
   --vac-fill: #237D84;
+  --sick: #C62F3A;
+  --sick-soft: #F8DADC;
+  --sick-fill: #C62F3A;
   --ot-fill: #C2502C;
 
   --tabbar-bg: rgba(250, 246, 238, 0.86);
@@ -79,6 +82,9 @@
   --slate: #9DADC3;
   --slate-soft: #252B34;
   --vac-fill: #24777D;
+  --sick: #F2707A;
+  --sick-soft: #3B1719;
+  --sick-fill: #B3303A;
   --ot-fill: #B4502E;
 
   --tabbar-bg: rgba(24, 20, 15, 0.86);
@@ -261,6 +267,7 @@ svg { display: block; }
 .cell.work { background: var(--sand-soft); }
 .cell.hol { background: var(--slate-soft); }
 .cell.is-vac { background: var(--vac-fill); color: #fff; }
+.cell.is-sick { background: var(--sick-fill); color: #fff; }
 .cell.is-ot { background: var(--ot-fill); color: #fff; }
 .cell.out { opacity: 0.35; }
 .cell.pre { opacity: 0.4; }
@@ -272,9 +279,9 @@ svg { display: block; }
   display: grid; place-items: center; border-radius: 999px;
 }
 .cell.today .c-num { background: var(--ink); color: var(--paper); }
-.cell.is-vac.today .c-num, .cell.is-ot.today .c-num { background: #fff; color: var(--ink); }
+.cell.is-vac.today .c-num, .cell.is-ot.today .c-num, .cell.is-sick.today .c-num { background: #fff; color: var(--ink); }
 .c-soll { font: 700 10.5px/1 var(--font-num); color: var(--sand-deep); padding-top: 2px; }
-.cell.is-vac .c-soll, .cell.is-ot .c-soll { color: rgba(255, 255, 255, 0.85); }
+.cell.is-vac .c-soll, .cell.is-ot .c-soll, .cell.is-sick .c-soll { color: rgba(255, 255, 255, 0.85); }
 
 .c-mid {
   font: 700 12px/1 var(--font-num); font-variant-numeric: tabular-nums;
@@ -304,6 +311,7 @@ svg { display: block; }
 .legend i { width: 11px; height: 11px; border-radius: 4px; }
 .lg-work { background: var(--sand-soft); box-shadow: inset 0 0 0 1px rgba(169, 98, 14, 0.25); }
 .lg-vac { background: var(--vac-fill); }
+.lg-sick { background: var(--sick-fill); }
 .lg-ot { background: var(--ot-fill); }
 .lg-hol { background: var(--slate-soft); box-shadow: inset 0 0 0 1px rgba(95, 111, 134, 0.3); }
 
@@ -322,6 +330,7 @@ svg { display: block; }
 .wrow:active { transform: scale(0.985); }
 .wrow.work { background: var(--sand-softer); border-color: var(--sand-soft); }
 .wrow.is-vac { background: var(--teal-soft); border-color: transparent; }
+.wrow.is-sick { background: var(--sick-soft); border-color: transparent; }
 .wrow.is-ot { background: var(--rust-soft); border-color: transparent; }
 .wrow.pre { opacity: 0.45; }
 .wr-date { display: flex; flex-direction: column; align-items: center; gap: 1px; }
@@ -338,6 +347,7 @@ svg { display: block; }
 .wr-sub { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
 .wrow.free .wr-title { color: var(--muted); font-weight: 600; }
 .wrow.is-vac .wr-title, .wrow.is-vac .wr-delta { color: var(--teal); }
+.wrow.is-sick .wr-title { color: var(--sick); }
 .wrow.is-ot .wr-title, .wrow.is-ot .wr-delta { color: var(--rust); }
 
 /* Tagesansicht */
@@ -355,6 +365,7 @@ svg { display: block; }
 .s-dot.work { background: var(--sand); }
 .s-dot.plus { background: var(--green); }
 .s-dot.vac { background: var(--teal); }
+.s-dot.sick { background: var(--sick); }
 .s-dot.ot { background: var(--rust); }
 
 .daycard {
@@ -392,6 +403,7 @@ svg { display: block; }
 .state svg { width: 30px; height: 30px; flex: none; }
 .state b { display: block; color: var(--ink); font-size: 16px; margin-bottom: 1px; }
 .state.vac { background: var(--teal-soft); color: var(--teal); }
+.state.sick { background: var(--sick-soft); color: var(--sick); }
 .state.ot { background: var(--rust-soft); color: var(--rust); }
 .state + .btn { margin-top: 10px; }
 
@@ -467,6 +479,7 @@ svg { display: block; }
 .btn.primary { background: var(--ink); color: var(--paper); }
 .btn.ot { background: var(--ot-fill); color: #fff; }
 .btn.vac { background: var(--vac-fill); color: #fff; }
+.btn.sick { background: var(--sick-fill); color: #fff; }
 .btn.line { background: transparent; color: var(--ink-2); box-shadow: inset 0 0 0 1.5px var(--line); }
 .btn.danger { color: var(--rust); }
 
@@ -477,6 +490,7 @@ svg { display: block; }
 .act-head b { font: 750 16px var(--font-num); font-variant-numeric: tabular-nums; }
 .act.ot .act-head b { color: var(--rust); }
 .act.vac .act-head b { color: var(--teal); }
+.act.sick .act-head b { color: var(--sick); }
 .act p { margin: 4px 0 12px; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
 .act em { font-style: normal; font-weight: 700; color: var(--rust); }
 
