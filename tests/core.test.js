@@ -188,6 +188,38 @@ test('Krank: nur Markierung, zählt neutral und ersetzt Urlaub/Anrechnung', () =
   assert.equal(T.balance(d), 60);
 });
 
+test('40-h-Plan zählt vergangene Arbeitstage automatisch als 8 h gearbeitet', () => {
+  const d = fresh();
+  T.setToday('2026-11-11'); // Mittwoch
+  T.setPlan(d.settings, '2026-11-09', T.PRESETS[40].schedule, T.PRESETS[40].breaks, true);
+  const mo = T.dayInfo(d, '2026-11-09');
+  assert.equal(mo.autoWork, true);
+  assert.equal(mo.worked, 480);
+  assert.equal(mo.delta, 0);
+  assert.equal(T.dayInfo(d, '2026-11-12').autoWork, false); // Zukunft: noch nicht
+  assert.equal(T.dayInfo(d, '2026-11-02').autoWork, false); // vorher 20-h-Plan ohne Automatik
+  assert.equal(T.rangeSummary(d, '2026-11-09', '2026-11-15').worked, 3 * 480);
+  T.setWork(d, '2026-11-10', { mode: 'duration', minutes: 540 }); // eigener Eintrag gewinnt → +1 h
+  assert.equal(T.balance(d), 60);
+  T.setOvertime(d, '2026-11-11', true); // Anrechnen nimmt das volle Soll, nicht die Automatik
+  assert.equal(T.dayInfo(d, '2026-11-11').used, 480);
+  T.setSick(d, '2026-11-09', true);
+  assert.equal(T.dayInfo(d, '2026-11-09').worked, 0);
+  // ältere Daten: ein vorhandener 40-h-Plan bekommt die Automatik
+  assert.equal(T.normalize({ settings: { plans: [{ from: null, schedule: T.PRESETS[40].schedule, breaks: T.PRESETS[40].breaks }] } }).settings.plans[0].auto, true);
+  T.setToday(null);
+});
+
+test('Arbeitsort: Büro, Homeoffice, geteilt', () => {
+  assert.deepEqual(T.placeOf(undefined), { place: 'office', switchAt: '12:00', firstHome: false });
+  assert.equal(T.placeOf({ place: 'home' }).place, 'home');
+  assert.deepEqual(T.placeOf({ place: 'split', switchAt: '13:00', firstHome: true }), { place: 'split', switchAt: '13:00', firstHome: true });
+  const d = fresh();
+  T.setWork(d, '2026-10-20', { mode: 'range', start: '08:00', end: '16:30', pause: 30, place: 'split', switchAt: '12:00' });
+  assert.equal(T.dayInfo(d, '2026-10-20').place, 'split');
+  assert.equal(T.dayInfo(d, '2026-10-20').worked, 480); // Ort ändert an der Zeit nichts
+});
+
 test('Alte Daten mit einzelnem Wochenplan werden übernommen', () => {
   const d = T.normalize({ settings: { schedule: [0, 300, 480, 0, 480, 0, 0], breaks: [0, 0, 30, 0, 30, 0, 0] }, days: {} });
   assert.equal(d.settings.plans.length, 1);

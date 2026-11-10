@@ -41,6 +41,8 @@ Alle Einträge bleiben lokal auf dem Gerät. Unter **Einstellungen → Backup ex
 | „Überstunden anrechnen“ | − fehlende Soll-Zeit (freier Tag: volles Soll; teilweise gearbeitet: nur die Lücke) |
 
 - **Wochenplan:** 20-h-Plan (Werkstudent): Mo 4:00 h, Di 8:00 h (+ 30 min Pause = 8:30 h Anwesenheit), Do 8:00 h (+ 30 min Pause). 40-h-Plan (Vollzeit): Mo–Fr je 8:00 h + 30 min Pause. Umschalten in den Einstellungen mit „Gilt ab“-Datum – Tage davor behalten ihren alten Plan, bisherige Überstunden bleiben unverändert. Ein Wechsel lässt sich per × wieder löschen.
+- **Automatisch gearbeitet (40-h-Plan voreingestellt):** Vergangene Arbeitstage ohne Eintrag zählen mit ihrem Soll als gearbeitet (08:00–16:30). Abweichende Tage einfach eintragen. Pro Plan in den Einstellungen abschaltbar.
+- **Homeoffice:** Beim Eintragen Arbeitsort Büro / Homeoffice / Geteilt (mit Wechsel-Uhrzeit). Homeoffice-Tage sind blau, geteilte Tage halb sand, halb blau. Ändert nichts an der Rechnung.
 - **Dark Mode:** Einstellungen → Darstellung → Aus / An / Auto (Auto folgt dem iPhone).
 - **Urlaubsanspruch:** volle Beschäftigungsmonate × 1,5 Tage, Bruchteile ab 0,5 werden aufgerundet (§ 5 BUrlG). 2026: 3 × 1,5 = 4,5 → **5 Tage**, ab 2027: **18 Tage**. Übertrag/Korrektur je Jahr im Urlaub-Tab.
 - **Feiertage:** gesetzliche Feiertage für Bremen (bundesweit + Reformationstag); dort gilt kein Soll. Bundesland in den Einstellungen wählbar.

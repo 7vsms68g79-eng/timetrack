@@ -29,6 +29,7 @@
       '<path d="M9.4 7.4h5.2c-.7 1.3-1.7 2.1-2.6 2.9-.9-.8-1.9-1.6-2.6-2.9zM12 15.4c1.3 0 2.7 1.5 3.4 4.1H8.6c.7-2.6 2.1-4.1 3.4-4.1z" fill="currentColor"/></svg>',
     cal: svg('<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="8.5" cy="14.5" r=".6" fill="currentColor"/><circle cx="12" cy="14.5" r=".6" fill="currentColor"/><circle cx="15.5" cy="14.5" r=".6" fill="currentColor"/>'),
     clock: svg('<circle cx="12" cy="13.5" r="7.5"/><path d="M12 10v3.5l2.4 2M9.5 2.8h5M12 2.8V6"/>'),
+    home: svg('<path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10v9.5h11V10"/><path d="M10.5 19.5v-5h3v5"/>'),
     sick: svg('<rect x="3.5" y="3.5" width="17" height="17" rx="5"/><path d="M12 8v8M8 12h8"/>'),
     sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>'),
     sliders: svg('<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>'),
@@ -254,6 +255,9 @@
     else if (i.overtime) cls.push('is-ot');
     else if (i.target > 0) cls.push('work');
     else if (i.holiday && i.scheduled > 0) cls.push('hol');
+    if (!i.sick && !i.vacation && i.hasWork && i.place !== 'office') {
+      cls.push(i.place === 'home' ? 'home' : T.placeOf(i.entry.work).firstHome ? 'split home-first' : 'split');
+    }
     if (isToday) cls.push('today');
 
     let mid = '';
@@ -261,13 +265,14 @@
     if (i.sick) { mid = '<span class="c-lbl">Krank</span>'; label += ', krank'; }
     else if (i.vacation) { mid = '<span class="c-lbl">Urlaub</span>'; label += ', Urlaub'; }
     else if (i.overtime) { mid = '<span class="c-lbl">ÜS</span>'; label += ', Überstunden angerechnet'; }
-    else if (i.hasWork) { mid = `<span class="c-ist${i.gained > 0 ? ' plus' : ''}">${T.fmt(i.worked)}</span>`; label += `, ${T.fmt(i.worked)} Stunden gearbeitet`; }
+    else if (i.hasWork) { mid = `<span class="c-ist${i.gained > 0 ? ' plus' : ''}">${T.fmt(i.worked)}</span>`; label += `, ${T.fmt(i.worked)} Stunden gearbeitet${i.place === 'home' ? ', Homeoffice' : i.place === 'split' ? ', teils Homeoffice' : ''}`; }
+    else if (i.autoWork) { mid = `<span class="c-ist auto">${T.fmt(i.worked)}</span>`; label += `, automatisch ${T.fmt(i.worked)} Stunden`; }
     else if (i.holiday) { mid = '<span class="c-hol">Feiertag</span>'; label += `, ${i.holiday}`; }
     if (i.target > 0) label += `, Soll ${T.fmt(i.target)} Stunden`;
 
     const soll = i.target > 0 ? `<span class="c-soll">${T.fmtShort(i.target)}</span>` : '';
     let bar = '';
-    if (i.target > 0 && i.hasWork && !i.vacation && !i.overtime && !i.sick) {
+    if (i.target > 0 && (i.hasWork || i.autoWork) && !i.vacation && !i.overtime && !i.sick) {
       const p = Math.min(1, i.worked / i.target);
       bar = `<span class="c-bar${p >= 1 ? ' full' : ''}"><i style="width:${Math.round(p * 100)}%"></i></span>`;
     }
@@ -291,13 +296,24 @@
     <span><i class="lg-vac"></i>Urlaub</span>
     <span><i class="lg-ot"></i>ÜS = Überstunden genommen</span>
     <span><i class="lg-sick"></i>Krank</span>
+    <span><i class="lg-home"></i>Homeoffice</span>
     <span><i class="lg-hol"></i>Feiertag</span>
   </div>`;
 
+  function placeText(w) {
+    const p = T.placeOf(w);
+    if (p.place === 'home') return 'Homeoffice';
+    if (p.place === 'split') return p.firstHome ? `Homeoffice, ab ${p.switchAt} Büro` : `Büro, ab ${p.switchAt} Homeoffice`;
+    return '';
+  }
+
   function workText(w, worked) {
     if (!w) return '';
-    if (w.mode === 'duration') return `${T.fmt(worked)} h gearbeitet`;
-    return `${w.start}–${w.end}${w.pause ? ` · ${w.pause} min Pause` : ''} · ${T.fmt(worked)} h`;
+    const place = placeText(w);
+    const time = w.mode === 'duration'
+      ? `${T.fmt(worked)} h gearbeitet`
+      : `${w.start}–${w.end}${w.pause ? ` · ${w.pause} min Pause` : ''} · ${T.fmt(worked)} h`;
+    return place ? `${time} · ${place}` : time;
   }
 
   function weekView() {
@@ -340,7 +356,9 @@
       if (i.hasWork) {
         sub = workText(i.entry.work, i.worked);
         if (i.worked < i.target) sub += ` · ${T.fmt(i.target - i.worked)} h unter Soll, kein Abzug`;
-      } else sub = i.pause ? `Anwesenheit ${T.fmt(i.presence)} h inkl. ${i.pause} min Pause` : 'Noch nichts eingetragen';
+      } else if (i.autoWork) sub = `Automatisch ${T.fmt(i.worked)} h gezählt (40-h-Plan)`;
+      else sub = i.pause ? `Anwesenheit ${T.fmt(i.presence)} h inkl. ${i.pause} min Pause` : 'Noch nichts eingetragen';
+      if (i.hasWork && i.place === 'home') cls.push('home');
       if (i.gained) delta = `<span class="pos">${T.fmt(i.gained, true)}</span>`;
     } else {
       cls.push('free');
@@ -372,7 +390,7 @@
       const dk = T.keyOf(d);
       const i = T.dayInfo(state.data, dk);
       const dot = i.sick ? 'sick' : i.vacation ? 'vac' : i.overtime ? 'ot' : i.hasWork ? (i.gained > 0 ? 'plus' : 'work') : '';
-      const cls = [dk === k ? 'on' : '', i.target > 0 ? 'work' : '', dk === tk ? 'today' : ''].filter(Boolean).join(' ');
+      const cls = [dk === k ? 'on' : '', i.target > 0 ? 'work' : '', i.hasWork && i.place === 'home' && !i.sick && !i.vacation ? 'home' : '', dk === tk ? 'today' : ''].filter(Boolean).join(' ');
       strip += `<button class="${cls}" data-act="pick" data-key="${dk}" aria-label="${T.WD_LONG[d.getDay()]}, ${longDate(d)}">
         <span class="s-wd">${T.WD_SHORT[d.getDay()]}</span><span class="s-num">${d.getDate()}</span><span class="s-dot ${dot}"></span>
       </button>`;
@@ -399,6 +417,9 @@
       return `<p class="empty">Vor deinem Arbeitsbeginn am ${longDate(T.parseKey(s.startDate))} – hier gibt es nichts zu erfassen.</p>`;
     }
     const parts = [chipsHTML(i)];
+    if (i.autoWork) {
+      parts.push(`<div class="banner auto">${ICON.glass}<span><b>Automatisch ${T.fmt(i.worked)} h gezählt</b>Im 40-h-Plan zählt ein Arbeitstag ohne Eintrag als Soll gearbeitet. War es anders, trag die Zeit unten ein und speichere.</span></div>`);
+    }
     if (i.holiday) {
       parts.push(`<div class="banner">${ICON.flag}<span><b>${esc(i.holiday)}</b>Gesetzlicher Feiertag – kein Soll. Arbeit an diesem Tag zählt komplett als Überstunden.</span></div>`);
     }
@@ -431,7 +452,10 @@
     const end = w.end || fallback.end;
     const minutes = mode === 'duration' ? w.minutes : T.workedMinutes({ start, end, pause });
     const worked = T.workedMinutes(mode === 'duration' ? { mode, minutes } : { mode, start, end, pause });
-    return `<div class="form" data-key="${i.key}" data-mode="${mode}" data-pause="${pause}">
+    const pl = T.placeOf(i.entry.work);
+    const placeBtn = (id, l) => `<button class="${pl.place === id ? 'on' : ''}" data-act="place" data-place="${id}">${l}</button>`;
+    const firstBtn = (id, l) => `<button class="${(pl.firstHome ? 'home' : 'office') === id ? 'on' : ''}" data-act="first" data-first="${id}">${l}</button>`;
+    return `<div class="form" data-key="${i.key}" data-mode="${mode}" data-pause="${pause}" data-place="${pl.place}" data-first="${pl.firstHome ? 'home' : 'office'}">
       <div class="form-head">
         <h3>Arbeitszeit</h3>
         <div class="seg mini">
@@ -452,6 +476,14 @@
       </div>
       <div class="f-dur">
         <label class="field"><span>Arbeitszeit netto (Std:Min)</span><input type="time" name="dur" value="${T.toHHMM(minutes)}"></label>
+      </div>
+      <div class="f-place">
+        <span class="f-label">Arbeitsort</span>
+        <div class="seg">${placeBtn('office', 'Büro')}${placeBtn('home', 'Homeoffice')}${placeBtn('split', 'Geteilt')}</div>
+        <div class="f-split">
+          <div class="field"><span>Zuerst</span><div class="seg mini">${firstBtn('office', 'Büro')}${firstBtn('home', 'Home')}</div></div>
+          <label class="field"><span>Wechsel um</span><input type="time" name="switchAt" value="${pl.switchAt}"></label>
+        </div>
       </div>
       <div class="f-result">${resultHTML(i, worked)}</div>
       <div class="f-actions">
@@ -508,8 +540,13 @@
   // Formularwerte lesen
   function formWork(form) {
     const val = (n) => ($(`[name="${n}"]`, form) || {}).value || '';
-    if (form.dataset.mode === 'duration') return { mode: 'duration', minutes: T.toMin(val('dur')) };
-    return { mode: 'range', start: val('start'), end: val('end'), pause: Number(form.dataset.pause) || 0 };
+    const w = form.dataset.mode === 'duration'
+      ? { mode: 'duration', minutes: T.toMin(val('dur')) }
+      : { mode: 'range', start: val('start'), end: val('end'), pause: Number(form.dataset.pause) || 0 };
+    const place = form.dataset.place;
+    if (place === 'home') w.place = 'home';
+    if (place === 'split') Object.assign(w, { place: 'split', switchAt: val('switchAt') || '12:00', firstHome: form.dataset.first === 'home' });
+    return w;
   }
 
   function formProblem(w) {
@@ -517,6 +554,9 @@
     if (!w.start || !w.end) return 'Bitte Beginn und Ende angeben';
     if (T.toMin(w.end) <= T.toMin(w.start)) return 'Ende liegt vor dem Beginn';
     if (T.workedMinutes(w) <= 0) return 'Pause ist länger als die Arbeitszeit';
+    if (w.place === 'split' && (T.toMin(w.switchAt) <= T.toMin(w.start) || T.toMin(w.switchAt) >= T.toMin(w.end))) {
+      return 'Der Wechsel muss zwischen Beginn und Ende liegen';
+    }
     return '';
   }
 
@@ -848,7 +888,7 @@
     const p = T.PRESETS[id];
     const msg = from <= s.startDate ? `${id}-h-Plan gilt jetzt für alle Tage` : `${id}-h-Plan gilt ab ${fmtDay(from)}`;
     state.planDraft = null;
-    mutate(msg, (d) => { state.planEdit = T.setPlan(d.settings, from, p.schedule, p.breaks); });
+    mutate(msg, (d) => { state.planEdit = T.setPlan(d.settings, from, p.schedule, p.breaks, p.auto); });
   }
 
   function settingsTab() {
@@ -909,7 +949,10 @@
         ${rows}
         <div class="srow total"><span class="sr-day">Pro Woche</span><b>${T.fmt(weekly)} h</b><span></span></div>
       </div>
-      <p class="group-foot">Soll = reine Arbeitszeit. Die Pause kommt nur zur Anwesenheit dazu (8:00 h + 30 min = 8:30 h vor Ort). Überstunden zählen erst, wenn du mehr als das Soll arbeitest.</p>
+      <div class="group sched">
+        <label class="row"><span>Arbeitstage automatisch als gearbeitet zählen</span><input type="checkbox" class="switch" data-set="planAuto"${plan.auto ? ' checked' : ''}></label>
+      </div>
+      <p class="group-foot">Soll = reine Arbeitszeit. Die Pause kommt nur zur Anwesenheit dazu (8:00 h + 30 min = 8:30 h vor Ort). Überstunden zählen erst, wenn du mehr als das Soll arbeitest. Automatisch: Vergangene Arbeitstage ohne Eintrag zählen mit ihrem Soll als gearbeitet (z. B. 08:00–16:30) – du änderst nur Tage, die anders waren. Beim 40-h-Plan ist das voreingestellt.</p>
 
       <h2 class="group-title">Allgemein</h2>
       <div class="group">
@@ -947,7 +990,7 @@
       <input type="file" id="import-file" accept="application/json,.json" hidden>
       <p class="group-foot">Deine Daten bleiben nur auf diesem Gerät. Sichere ab und zu ein Backup, z. B. in der Dateien-App.</p>
       ${installCard()}
-      <p class="about">TimeTrack 1.4</p>`;
+      <p class="about">TimeTrack 1.5</p>`;
   }
 
   function applySetting(el) {
@@ -967,6 +1010,8 @@
       s.vacationPerMonth = v;
     } else if (key === 'vacationCredit') {
       s.vacationCredit = el.checked;
+    } else if (key === 'planAuto') {
+      s.plans[editPlanIndex()].auto = el.checked;
     } else if (key === 'vacationDayMinutes') {
       s.vacationDayMinutes = Number(el.value);
     } else if (key === 'state') {
@@ -1163,6 +1208,13 @@
         break;
       case 'mode': setMode(t); break;
       case 'pause': stepPause(t); break;
+      case 'place': case 'first': {
+        const form = t.closest('.form');
+        form.dataset[t.dataset.act] = t.dataset[t.dataset.act];
+        t.parentNode.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === t));
+        updateResult(form);
+        break;
+      }
       case 'work-save': saveWork(t.closest('.form')); break;
       case 'work-del': {
         const key = t.closest('.form').dataset.key;
